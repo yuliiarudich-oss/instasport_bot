@@ -1,0 +1,4 @@
+aiogram==3.1.1
+aiohttp==3.8.5
+gspread==5.9.1
+google-auth==2.22.0
