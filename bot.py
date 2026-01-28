@@ -1,17 +1,18 @@
 import asyncio
 import os
-import threading
 from datetime import datetime
 
 from aiogram import Bot, Dispatcher
+from aiogram.enums import ParseMode
+from aiogram.client.default import DefaultBotProperties
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
-from aiohttp import web
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
 import gspread
 from google.oauth2.service_account import Credentials
+
 
 # ------------------ НАСТРОЙКИ ------------------
 TOKEN = "8588765754:AAEL14w3ZK6HjCPVAOBT6obKR9YPLlDdykM"
@@ -194,3 +195,4 @@ if __name__ == "__main__":
     app = web.Application()
     app.router.add_get("/", handle)
     web.run_app(app, port=port)
+
