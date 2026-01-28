@@ -13,7 +13,7 @@ from google.oauth2.service_account import Credentials
 
 
 # ------------------ НАСТРОЙКИ ------------------
-TOKEN = "ВАШ_ТОКЕН_БОТА"
+TOKEN = "8588765754:AAEL14w3ZK6HjCPVAOBT6obKR9YPLlDdykM"
 CHAT_USERNAME = "@instasport_web"
 GOOGLE_SHEET_NAME = "Webinar Registrations"
 
@@ -201,3 +201,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
