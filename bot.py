@@ -1,24 +1,24 @@
-import asyncio
 import os
+import asyncio
 from datetime import datetime
-from aiohttp import web
 
 from aiogram import Bot, Dispatcher
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiohttp import web
 
 import gspread
 from google.oauth2.service_account import Credentials
 
-# ------------------ ENV ------------------
-TOKEN = os.getenv("BOT_TOKEN")
-if not TOKEN:
-    raise ValueError("BOT_TOKEN not found in env")
-
+# ------------------ НАСТРОЙКИ ------------------
+TOKEN = os.environ.get("BOT_TOKEN")  # токен берем из переменных Render
 CHAT_USERNAME = "@instasport_web"
 GOOGLE_SHEET_NAME = "Webinar Registrations"
+WEBHOOK_PATH = f"/webhook/{TOKEN}"
+WEBHOOK_URL = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME')}{WEBHOOK_PATH}"
+
 
 # ------------------ GOOGLE SHEETS ------------------
 def get_sheet():
@@ -40,17 +40,23 @@ def add_user_to_sheet(user):
         user.get("registration_time") or ""
     ])
 
-# ------------------ BOT ------------------
+
+# ------------------ FSM ------------------
 class Registration(StatesGroup):
     waiting_for_name = State()
     waiting_for_contact = State()
     waiting_for_chat = State()
 
-bot = Bot(token=TOKEN)
+
+# ------------------ БОТ ------------------
+bot = Bot(token=TOKEN, parse_mode="HTML")
 dp = Dispatcher()
+
+
 users = {}
 
-# ------------------ START ------------------
+
+# ------------------ СТАРТОВОЕ СООБЩЕНИЕ ------------------
 @dp.message(CommandStart())
 async def start(message: Message, state: FSMContext):
     user_id = message.from_user.id
@@ -61,48 +67,81 @@ async def start(message: Message, state: FSMContext):
                    KeyboardButton(text="Больше о вебинаре")]],
         resize_keyboard=True
     )
-
     await message.answer(
         "Привет! 👋\n\n"
-        "Вебинар: «Как вернуть клиентов и увеличить доход спорт-клуба без стресса»\n\n"
-        "🎁 Бонусы и спецусловия для участников\n\n"
-        "Нажмите «Зарегистрироваться»",
+        "Рады видеть вас здесь!\n"
+        "Скоро мы проведём вебинар «Как вернуть клиентов и увеличить доход вашего спорт‑клуба без лишнего стресса».\n\n"
+        "🎁 Для участников вебинара будут эксклюзивные бонусы и специальные условия подключения!\n\n"
+        "Нажмите «Зарегистрироваться» и забронируйте своё место!",
         reply_markup=keyboard
     )
 
-# ------------------ INFO ------------------
+
+# ------------------ БОЛЬШЕ О ВЕБИНАРЕ ------------------
+async def send_webinar_info(user_id: int):
+    info_text = (
+        "🏋️ Вебинар для владельцев спорт‑клубов: «Как вернуть клиентов и увеличить доход без лишнего стресса»\n\n"
+        "📌 Что проговорим:\n"
+        "- Почему клиенты пропадают и как это заметить вовремя\n"
+        "- 3 уровня контроля: база, поведение, деньги\n"
+        "- Минимизация человеческого фактора и онлайн‑запись\n"
+        "- Автоматические SMS/Push‑рассылки для удержания клиентов\n"
+        "- Аналитика и статистика в одной системе\n"
+        "- Как Instasport помогает управлять клубом и повышать прибыль\n\n"
+        "🗓 Дата: [вставьте дату вебинара]\n"
+        "⏰ Время: [вставьте время]\n\n"
+        "💡 Бонус для участников: специальные условия подключения и персональные демо‑сессии."
+    )
+    await bot.send_message(chat_id=user_id, text=info_text)
+
 @dp.message(lambda m: m.text == "Больше о вебинаре")
 async def webinar_info(message: Message):
-    await message.answer(
-        "🏋️ Вебинар для владельцев клубов\n\n"
-        "Темы:\n"
-        "- Потери клиентов\n"
-        "- Автоматизация\n"
-        "- Контроль денег\n"
-        "- Аналитика\n"
-        "- Рост прибыли\n\n"
-        "📩 Ссылка придёт перед стартом"
-    )
+    await send_webinar_info(message.from_user.id)
 
-# ------------------ REGISTRATION ------------------
+
+# ------------------ FAQ ------------------
+async def send_faq(user_id: int):
+    faq_text = (
+        "❓ FAQ по вебинару:\n\n"
+        "1️⃣ Как зарегистрироваться? — Просто нажмите «Зарегистрироваться» и следуйте инструкциям.\n"
+        "2️⃣ Нужно ли платить? — Нет, вебинар бесплатный.\n"
+        "3️⃣ Где смотреть? — Ссылка придёт перед началом вебинара.\n"
+        "4️⃣ Есть бонусы? — Да, специальные условия подключения и персональные демо-сессии для участников.\n"
+    )
+    await bot.send_message(chat_id=user_id, text=faq_text)
+
+@dp.message(lambda m: m.text == "FAQ")
+async def faq(message: Message):
+    await send_faq(message.from_user.id)
+
+
+# ------------------ РЕГИСТРАЦИЯ ------------------
 @dp.message(lambda m: m.text == "Зарегистрироваться")
 async def ask_name(message: Message, state: FSMContext):
-    await message.answer("Введите имя:")
+    await message.answer("Напиши своё имя 👇")
     await state.set_state(Registration.waiting_for_name)
 
 @dp.message(Registration.waiting_for_name)
 async def get_name(message: Message, state: FSMContext):
-    users[message.from_user.id]["name"] = message.text
+    user_id = message.from_user.id
+    name = message.text.strip()
+    if not name:
+        await message.answer("Пожалуйста, введи корректное имя.")
+        return
+    users[user_id]["name"] = name
     await state.set_state(Registration.waiting_for_contact)
 
-    kb = ReplyKeyboardMarkup(
+    contact_keyboard = ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text="📱 Поделиться контактом", request_contact=True)]],
-        resize_keyboard=True
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    await message.answer(
+        "Отлично! Теперь поделись номером телефона 👇",
+        reply_markup=contact_keyboard
     )
 
-    await message.answer("Поделитесь номером:", reply_markup=kb)
-
-@dp.message(Registration.waiting_for_contact, lambda m: m.contact)
+@dp.message(Registration.waiting_for_contact, lambda m: m.contact is not None)
 async def get_contact(message: Message, state: FSMContext):
     user_id = message.from_user.id
     users[user_id]["phone"] = message.contact.phone_number
@@ -111,39 +150,71 @@ async def get_contact(message: Message, state: FSMContext):
     add_user_to_sheet(users[user_id])
 
     await message.answer(
-        f"✅ Регистрация завершена\n\nВступите в чат: {CHAT_USERNAME}\n"
-        "После — напишите /check"
+        f"Спасибо! ✅\n\nТеперь <b>обязательно вступите в чат</b>: {CHAT_USERNAME}\n"
+        "После вступления напишите /check для подтверждения регистрации на вебинар."
     )
-
     await state.set_state(Registration.waiting_for_chat)
 
-# ------------------ CHECK ------------------
+
+# ------------------ ПРОВЕРКА ВСТУПЛЕНИЯ В ЧАТ ------------------
 @dp.message(Command("check"))
-async def check_chat(message: Message, state: FSMContext):
+async def check_chat_member(message: Message, state: FSMContext):
     user_id = message.from_user.id
-    member = await bot.get_chat_member(CHAT_USERNAME, user_id)
+    try:
+        member = await bot.get_chat_member(CHAT_USERNAME, user_id)
+        if member.status in ["member", "administrator", "creator"]:
+            await message.answer(
+                "🎉 Готово! Вы зарегистрированы на вебинар!\n\n"
+                "Ваше место закреплено, ждём вас на эфире 🚀"
+            )
+            await state.clear()
 
-    if member.status in ["member", "administrator", "creator"]:
-        await message.answer("🎉 Вы зарегистрированы на вебинар!")
-        await state.clear()
-    else:
-        await message.answer("❌ Вы ещё не в чате")
+            # follow-up через 1 минуту
+            asyncio.create_task(send_followup(user_id))
+        else:
+            await message.answer(f"Ты ещё не в чате 👀\nВот ссылка: {CHAT_USERNAME}")
+    except Exception as e:
+        await message.answer("❌ Ошибка проверки. Бот должен быть администратором в чате.")
+        print(e)
 
-# ------------------ WEB SERVER ------------------
-async def health(request):
-    return web.Response(text="Bot is running")
 
-async def main():
-    app = web.Application()
-    app.router.add_get("/", health)
+# ------------------ FOLLOW-UP ------------------
+async def send_followup(user_id: int):
+    await asyncio.sleep(60)
+    followup_keyboard = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="Больше о вебинаре"), KeyboardButton(text="FAQ")]],
+        resize_keyboard=True
+    )
+    try:
+        await bot.send_message(
+            chat_id=user_id,
+            text="Остались вопросы?\nУзнавай больше!",
+            reply_markup=followup_keyboard
+        )
+    except Exception as e:
+        print(f"Ошибка при отправке follow-up: {e}")
 
-    runner = web.AppRunner(app)
-    await runner.setup()
-    port = int(os.environ.get("PORT", 8000))
-    site = web.TCPSite(runner, "0.0.0.0", port)
-    await site.start()
 
-    await dp.start_polling(bot)
+# ------------------ WEBHOOK ------------------
+async def handle(request):
+    update = await request.json()
+    from aiogram import types
+    update_obj = types.Update(**update)
+    await dp.process_update(update_obj)
+    return web.Response(text="OK")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    port = int(os.environ.get("PORT", 8000))
+    app = web.Application()
+    app.router.add_post(WEBHOOK_PATH, handle)
+
+    async def on_startup():
+        # Ставим webhook
+        await bot.delete_webhook()
+        await bot.set_webhook(WEBHOOK_URL)
+
+    async def on_cleanup():
+        # Убираем webhook при остановке
+        await bot.delete_webhook()
+
+    web.run_app(app, port=port, on_startup=on_startup, on_cleanup=on_cleanup)
