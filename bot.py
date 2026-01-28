@@ -13,7 +13,10 @@ from google.oauth2.service_account import Credentials
 
 
 # ------------------ НАСТРОЙКИ ------------------
-TOKEN = "8588765754:AAEL14w3ZK6HjCPVAOBT6obKR9YPLlDdykM"
+TOKEN = os.getenv("BOT_TOKEN")
+if not TOKEN:
+    raise ValueError("BOT_TOKEN не найден в Environment Variables")
+
 CHAT_USERNAME = "@instasport_web"
 GOOGLE_SHEET_NAME = "Webinar Registrations"
 
@@ -201,4 +204,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
